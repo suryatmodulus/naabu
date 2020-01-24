@@ -77,7 +77,9 @@ func (s *Scanner) send(conn net.PacketConn, l ...gopacket.SerializableLayer) (in
 
 // Scan scans a single host and returns the results
 func (s *Scanner) Scan(wordlist map[int]struct{}) (*Result, error) {
-	inactive, err := pcap.NewInactiveHandle(s.networkInterface.Name)
+	// lookup interface name from pcap
+	itfName, _ := getKernelInterfaceNameFromIP(s.srcIP)
+	inactive, err := pcap.NewInactiveHandle(itfName)
 	if err != nil {
 		return nil, err
 	}
@@ -308,4 +310,25 @@ func getInterfaceFromIP(ip net.IP) (*net.Interface, error) {
 	}
 
 	return nil, fmt.Errorf("no interface found for ip %s", address)
+}
+
+func getKernelInterfaceNameFromIP(ip net.IP) (string, error) {
+	address := ip.String()
+
+	interfaces, err := pcap.FindAllDevs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, i := range interfaces {
+		for _, v := range i.Addresses {
+			// Check if the IP for the current interface is our
+			// source IP. If yes, return the interface
+			if strings.HasPrefix(v.IP.String(), address) {
+				return i.Name, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no internal interface found for ip %s", address)
 }
